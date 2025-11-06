@@ -1,0 +1,142 @@
+<!-- save as templates/index.html (or satclassifier-realtime.html if you prefer static) -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SatClassifier — Real-time (Fixed)</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<style>
+  html,body{height:100%;margin:0;font-family:Inter,Arial;background:#0b1220;color:#e6eef8}
+  .container{display:flex;height:100vh}
+  .left{width:320px;padding:14px;background:#071025}
+  .mapwrap{flex:1;display:flex;flex-direction:column}
+  #map{flex:1}
+  button{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:0;background:#0ea5a6;color:white;cursor:pointer}
+  .ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#cfe7ff}
+  .small{font-size:13px;color:#9aa7c7}
+  .preview{padding:12px;background:#071025;border-top:1px solid rgba(255,255,255,0.02)}
+</style>
+</head>
+<body>
+<div style="display:flex;align-items:center;padding:12px;background:#021026;color:#cfe7ff">
+  <div style="font-weight:800;margin-right:10px">SC</div>
+  <div>
+    <div style="font-size:16px">SatClassifier — Real-time (Fixed draw + result page)</div>
+    <div class="small">Draw a bbox then Classify → opens result page powered by C++ OpenCV</div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="left">
+    <div style="margin-bottom:12px"><strong>Tools</strong></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button id="drawBtn" class="ghost">Draw</button>
+      <button id="bigBoxBtn">Create Big Box</button>
+      <button id="clearBtn" class="ghost">Clear</button>
+    </div>
+
+    <div style="margin-top:8px">
+      <div class="small">Fetch resolution</div>
+      <select id="sizeSelect" style="margin-top:6px;padding:8px;border-radius:6px;background:#071025;color:#dbeafe">
+        <option value="512">512</option>
+        <option value="800" selected>800</option>
+        <option value="1024">1024</option>
+      </select>
+    </div>
+
+    <div style="margin-top:12px">
+      <form id="classifyForm" action="/classify" method="post" target="_blank" style="display:none">
+        <input name="west" /><input name="south" /><input name="east" /><input name="north" />
+        <input name="size" />
+      </form>
+      <button id="classifyBtn" style="margin-top:12px">Classify (open result)</button>
+    </div>
+
+    <div class="preview" id="previewBox">
+      <div class="small">Status: <span id="status">Ready</span></div>
+    </div>
+  </div>
+
+  <div class="mapwrap">
+    <div id="map"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+<script>
+let map = L.map('map', {preferCanvas:true}).setView([20,78], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+let drawnItems = new L.FeatureGroup().addTo(map);
+const drawControl = new L.Control.Draw({
+  draw:{ rectangle:{ shapeOptions:{color:'#ff9f1c', weight:2, dashArray:'6 6'} }, polygon:false, polyline:false, circle:false, marker:false},
+  edit:{ featureGroup: drawnItems, remove:true }
+});
+map.addControl(drawControl);
+
+let lastRect = null;
+map.on(L.Draw.Event.CREATED, function(e){
+  drawnItems.clearLayers();
+  drawnItems.addLayer(e.layer);
+  lastRect = e.layer;
+  document.getElementById('status').innerText = 'Crop ready';
+});
+map.on(L.Draw.Event.EDITED, function(){ lastRect = drawnItems.getLayers()[0] || null; });
+map.on(L.Draw.Event.DELETED, function(){ lastRect = null; document.getElementById('status').innerText='Ready'; });
+
+/* Programmatically enable Rectangle draw when user clicks Draw */
+document.getElementById('drawBtn').addEventListener('click', ()=>{
+  // create a new rectangle draw handler and enable it
+  const drawRect = new L.Draw.Rectangle(map, drawControl.options.draw.rectangle);
+  drawRect.enable();
+  document.getElementById('status').innerText = 'Drawing...';
+});
+
+/* Big box: create a large rectangle covering center 70% of current view */
+document.getElementById('bigBoxBtn').addEventListener('click', ()=>{
+  const b = map.getBounds();
+  const s = b.getSouth(), n = b.getNorth(), w = b.getWest(), e = b.getEast();
+  const latSpan = n - s, lonSpan = e - w;
+  const pad = 0.15; // 70% area
+  const ns = s + latSpan*pad, nn = n - latSpan*pad, nw = w + lonSpan*pad, ne = e - lonSpan*pad;
+  drawnItems.clearLayers();
+  const rect = L.rectangle([[ns,nw],[nn,ne]], {color:'#ff9f1c', weight:2, dashArray:'6 6'}).addTo(drawnItems);
+  lastRect = rect;
+  map.fitBounds(rect.getBounds());
+  document.getElementById('status').innerText = 'Big crop created';
+});
+
+/* Clear */
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  drawnItems.clearLayers(); lastRect = null; document.getElementById('status').innerText='Cleared';
+});
+
+/* Classify -> submit form to /classify in new tab */
+document.getElementById('classifyBtn').addEventListener('click', ()=>{
+  if (!lastRect) {
+    alert('Draw a rectangle first (Draw or Create Big Box).');
+    return;
+  }
+  const bounds = lastRect.getBounds();
+  const west = bounds.getWest(), south = bounds.getSouth(), east = bounds.getEast(), north = bounds.getNorth();
+  const size = document.getElementById('sizeSelect').value;
+
+  const form = document.getElementById('classifyForm');
+  form.elements['west'].value = west;
+  form.elements['south'].value = south;
+  form.elements['east'].value = east;
+  form.elements['north'].value = north;
+  form.elements['size'].value = size;
+
+  // open in new tab
+  form.submit();
+  document.getElementById('status').innerText = 'Sent to server — result will open in new tab';
+});
+</script>
+</body>
+</html>

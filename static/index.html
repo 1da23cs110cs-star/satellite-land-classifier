@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Satellite Land Classifier</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+
+<style>
+/* Light-blue / white theme like requested */
+:root{
+  --header-start:#2fc0ff;
+  --header-end:#00a3ff;
+  --panel-bg:#ffffff;
+  --panel-ink:#042a3f;
+  --muted:#6b8896;
+  --btn-start:#00b0ff;
+  --btn-end:#0077ff;
+  --btn-shadow: 0 14px 36px rgba(0,119,255,0.14);
+}
+
+/* header */
+.header {
+  display:flex;align-items:center;gap:12px;padding:14px 18px;background:linear-gradient(90deg,var(--header-start),var(--header-end));
+  color:white;
+  box-shadow:0 8px 20px rgba(0,0,0,0.08);
+}
+.header .icon {
+  width:56px;height:56px;border-radius:12px;background:white;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 18px rgba(0,0,0,0.12);
+  animation: pulse 2.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+  50%{ transform: scale(1.035); box-shadow: 0 18px 36px rgba(0,119,255,0.16); }
+  100%{ transform: scale(1); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+}
+.header .title { font-weight:800; font-size:18px; line-height:1; }
+.header .subtitle { font-size:13px; color: rgba(255,255,255,0.95) }
+
+/* overall layout */
+.container { display:flex; gap:16px; height: calc(100vh - 84px); padding:18px; background: linear-gradient(180deg,#f7fbff,#eef8ff); }
+.left { width:360px; display:flex; align-items:center; justify-content:center; }
+.card { width:320px; background:var(--panel-bg); padding:20px; border-radius:14px; box-shadow:0 12px 36px rgba(10,40,80,0.06); text-align:center; }
+.card h3 { margin:0 0 8px 0; color:var(--panel-ink); }
+.card p { margin:0 0 14px 0; color:var(--muted) }
+
+/* Buttons */
+.btn {
+  display:inline-block;padding:10px 16px;border-radius:12px;border:0;cursor:pointer;font-weight:800;color:white;
+  background:linear-gradient(180deg,var(--btn-start),var(--btn-end));
+  box-shadow:var(--btn-shadow); transition: transform .12s ease, box-shadow .12s ease;
+}
+.btn:hover{ transform: translateY(-3px); }
+.btn.ghost{ background:#ffffff;color:var(--btn-end); box-shadow:none; border:1px solid rgba(0,119,255,0.12); font-weight:700; }
+
+.select { padding:8px 10px; border-radius:8px; border:1px solid #e6eef8; background:white; color:var(--panel-ink) }
+
+.status { margin-top:8px; color:var(--muted) }
+
+/* map area */
+.mapwrap { flex:1; border-radius:14px; overflow:hidden; box-shadow:0 12px 36px rgba(0,0,0,0.06); position:relative; background:white }
+#map { width:100%; height:100%; display:block; }
+
+/* floating top text on map (centered) */
+.map-top-text {
+  position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:700;
+  background:white; padding:10px 14px; border-radius:12px; font-weight:700; color:var(--btn-end);
+  box-shadow:0 12px 36px rgba(0,119,255,0.08); border:1px solid rgba(0,119,255,0.08);
+}
+
+/* small responsive */
+@media (max-width:900px){
+  .container{flex-direction:column;padding:12px;height:auto}
+  .left{order:2}
+  .mapwrap{order:1;height:60vh}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="icon" aria-hidden="true">
+    <!-- satellite SVG (no rotation, only pulse) -->
+    <svg viewBox="0 0 64 64" width="36" height="36" xmlns="http://www.w3.org/2000/svg" role="img" focusable="false">
+      <rect x="12" y="12" width="40" height="28" rx="4" ry="4" fill="#ffffff" stroke="#00a3ff" stroke-width="2"/>
+      <rect x="30" y="6" width="4" height="8" rx="1" ry="1" fill="#00a3ff"/>
+      <rect x="2" y="22" width="10" height="18" rx="2" ry="2" fill="#0077ff"/>
+      <g fill="#cfeeff"><rect x="4" y="24" width="2" height="14"/><rect x="7" y="24" width="2" height="14"/></g>
+      <rect x="52" y="22" width="10" height="18" rx="2" ry="2" fill="#0077ff"/>
+      <g fill="#cfeeff"><rect x="54" y="24" width="2" height="14"/><rect x="57" y="24" width="2" height="14"/></g>
+      <circle cx="32" cy="26" r="6" fill="#00a3ff"/>
+      <circle cx="32" cy="26" r="3.2" fill="#ffffff"/>
+    </svg>
+  </div>
+
+  <div>
+    <div class="title">Satellite Land Classifier</div>
+    <div class="subtitle">ESA WorldCover — instant land-cover classification (water, vegetation, urban, and more)</div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="left">
+    <div class="card">
+      <h3>Tools</h3>
+      <p>Draw a bounding box on the map or create a big box for the current view.</p>
+
+      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:10px">
+        <button id="drawBtn" class="btn ghost">Draw</button>
+        <button id="bigBoxBtn" class="btn">Create Big Box</button>
+        <button id="clearBtn" class="btn ghost">Clear</button>
+      </div>
+
+      <div style="margin:10px 0">
+        <div style="color:var(--muted);font-size:13px;margin-bottom:6px">Fetch resolution (max dimension)</div>
+        <select id="sizeSelect" class="select">
+          <option value="512">512</option>
+          <option value="800" selected>800</option>
+          <option value="1024">1024</option>
+        </select>
+      </div>
+
+      <div style="margin-top:12px">
+        <button id="classifyBtn" class="btn" style="width:100%;">Classify (open result)</button>
+      </div>
+
+      <div class="status" id="status">Status: Ready</div>
+    </div>
+  </div>
+
+  <div class="mapwrap">
+    <!-- top text on map -->
+    <div class="map-top-text" id="mapTopText">Draw the region to classify</div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://rawcdn.githack.com/mapbox/leaflet-image/gh-pages/leaflet-image.js"></script>
+
+<script>
+/* ---------- Map + draw setup ---------- */
+let map = L.map('map', {preferCanvas:true}).setView([20,78], 4);
+
+// ESA WorldCover WMS (thematic)
+const wmsUrl = 'https://services.terrascope.be/wms/v2';
+const wmsLayer = L.tileLayer.wms(wmsUrl, {
+  layers: 'WORLDCOVER_2021_MAP',
+  format: 'image/png',
+  transparent: false,
+  attribution: 'ESA WorldCover 2021',
+  maxZoom: 12,
+  crossOrigin: true
+}).addTo(map);
+
+let drawnItems = new L.FeatureGroup().addTo(map);
+const drawControl = new L.Control.Draw({
+  draw:{ rectangle:{ shapeOptions:{color:'#0a84ff', weight:2, dashArray:'6 6'} }, polygon:false, polyline:false, circle:false, marker:false},
+  edit:{ featureGroup: drawnItems, remove:true }
+});
+map.addControl(drawControl);
+
+let lastRect = null;
+map.on(L.Draw.Event.CREATED, function(e){
+  drawnItems.clearLayers();
+  drawnItems.addLayer(e.layer);
+  lastRect = e.layer;
+  document.getElementById('status').innerText = 'Status: Crop ready';
+  document.getElementById('mapTopText').innerText = 'Draw the region to classify';
+});
+map.on(L.Draw.Event.EDITED, function(){ lastRect = drawnItems.getLayers()[0] || null; });
+map.on(L.Draw.Event.DELETED, function(){ lastRect = null; document.getElementById('status').innerText='Status: Ready'; });
+
+/* Buttons */
+document.getElementById('drawBtn').addEventListener('click', ()=>{
+  const drawRect = new L.Draw.Rectangle(map, drawControl.options.draw.rectangle);
+  drawRect.enable();
+  document.getElementById('status').innerText = 'Status: Drawing...';
+});
+
+document.getElementById('bigBoxBtn').addEventListener('click', ()=>{
+  const b = map.getBounds();
+  const s = b.getSouth(), n = b.getNorth(), w = b.getWest(), e = b.getEast();
+  const latSpan = n - s, lonSpan = e - w;
+  const pad = 0.15;
+  const ns = s + latSpan*pad, nn = n - latSpan*pad, nw = w + lonSpan*pad, ne = e - lonSpan*pad;
+  drawnItems.clearLayers();
+  const rect = L.rectangle([[ns,nw],[nn,ne]], {color:'#0a84ff', weight:2, dashArray:'6 6'}).addTo(drawnItems);
+  lastRect = rect;
+  map.fitBounds(rect.getBounds());
+  document.getElementById('status').innerText = 'Status: Big crop created';
+});
+
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  drawnItems.clearLayers(); lastRect = null; document.getElementById('status').innerText='Status: Cleared';
+});
+
+/* ---------- Helpers to hide & restore draw overlays (prevent tint on capture) ---------- */
+function hideDrawnLayers() {
+  const saved = [];
+  drawnItems.eachLayer(layer => {
+    const orig = { layer: layer, options: Object.assign({}, layer.options || {}), pathStyle: layer._path ? {
+        stroke: layer._path.getAttribute('stroke'),
+        'stroke-opacity': layer._path.getAttribute('stroke-opacity'),
+        'fill-opacity': layer._path.getAttribute('fill-opacity')
+      } : null };
+    saved.push(orig);
+    try {
+      if (typeof layer.setStyle === 'function') layer.setStyle({ stroke: false, fill: false, opacity: 0, fillOpacity: 0 });
+      if (layer._path) {
+        layer._path.setAttribute('stroke-opacity', '0');
+        layer._path.setAttribute('fill-opacity', '0');
+      }
+    } catch (e) { console.warn('hideDrawnLayers error', e); }
+  });
+  return saved;
+}
+function restoreDrawnLayers(saved) {
+  saved.forEach(item => {
+    const layer = item.layer;
+    try {
+      if (typeof layer.setStyle === 'function') {
+        const s = {};
+        if ('color' in item.options) s.color = item.options.color;
+        if ('weight' in item.options) s.weight = item.options.weight;
+        if ('opacity' in item.options) s.opacity = item.options.opacity;
+        if ('fillOpacity' in item.options) s.fillOpacity = item.options.fillOpacity;
+        if ('dashArray' in item.options) s.dashArray = item.options.dashArray;
+        if (Object.keys(s).length) layer.setStyle(s);
+      }
+      if (layer._path && item.pathStyle) {
+        if (item.pathStyle.stroke !== null) layer._path.setAttribute('stroke', item.pathStyle.stroke);
+        if (item.pathStyle['stroke-opacity'] !== null) layer._path.setAttribute('stroke-opacity', item.pathStyle['stroke-opacity']);
+        if (item.pathStyle['fill-opacity'] !== null) layer._path.setAttribute('fill-opacity', item.pathStyle['fill-opacity']);
+      }
+    } catch (e) { console.warn('restoreDrawnLayers error', e); }
+  });
+}
+
+/* ---------- Compress & upload helpers ---------- */
+function makeCompressedDataURL(canvas, targetSize) {
+  const maxDim = Math.max(canvas.width, canvas.height);
+  let outCanvas = canvas;
+  if (maxDim > targetSize) {
+    const scale = targetSize / maxDim;
+    const r = document.createElement('canvas');
+    r.width = Math.round(canvas.width * scale);
+    r.height = Math.round(canvas.height * scale);
+    r.getContext('2d').drawImage(canvas, 0, 0, r.width, r.height);
+    outCanvas = r;
+  }
+  return outCanvas.toDataURL('image/jpeg', 0.80);
+}
+function dataURLtoBlob(dataurl) {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--){
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], {type:mime});
+}
+
+/* ---------- Classify button handler ---------- */
+document.getElementById('classifyBtn').addEventListener('click', ()=> {
+  if (!lastRect) { alert('Draw a rectangle first.'); return; }
+
+  // update map top text to show processing
+  const topText = document.getElementById('mapTopText');
+  topText.innerText = 'Please wait — result is processing…';
+
+  const bounds = lastRect.getBounds();
+  const west = bounds.getWest(), south = bounds.getSouth(), east = bounds.getEast(), north = bounds.getNorth();
+  const size = parseInt(document.getElementById('sizeSelect').value, 10) || 800;
+
+  document.getElementById('status').innerText = 'Status: Rendering image...';
+  const saved = hideDrawnLayers();
+
+  leafletImage(map, function(err, canvas) {
+    restoreDrawnLayers(saved);
+
+    if (err) {
+      alert('Error rendering map: ' + err);
+      document.getElementById('status').innerText = 'Status: Ready';
+      topText.innerText = 'Draw the region to classify';
+      return;
+    }
+
+    const swPoint = map.latLngToContainerPoint([south, west]);
+    const nePoint = map.latLngToContainerPoint([north, east]);
+    const cropX = Math.round(Math.min(swPoint.x, nePoint.x));
+    const cropY = Math.round(Math.min(nePoint.y, swPoint.y));
+    const cropW = Math.round(Math.abs(nePoint.x - swPoint.x));
+    const cropH = Math.round(Math.abs(nePoint.y - swPoint.y));
+
+    if (cropW <= 0 || cropH <= 0) {
+      alert('Invalid crop size. Try drawing again.');
+      document.getElementById('status').innerText = 'Status: Ready';
+      topText.innerText = 'Draw the region to classify';
+      return;
+    }
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = cropW; outCanvas.height = cropH;
+    const ctx = outCanvas.getContext('2d');
+    ctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+    const dataURL = makeCompressedDataURL(outCanvas, size);
+    const blob = dataURLtoBlob(dataURL);
+
+    const fd = new FormData();
+    fd.append('imagefile', blob, 'crop.jpg');
+    fd.append('west', west); fd.append('south', south); fd.append('east', east); fd.append('north', north);
+    fd.append('size', size);
+
+    document.getElementById('status').innerText = 'Status: Uploading...';
+
+    fetch('/upload_blob', { method: 'POST', body: fd })
+      .then(resp => {
+        if (!resp.ok) throw new Error('Server ' + resp.status);
+        return resp.text();
+      })
+      .then(html => {
+        // open result in a new window/tab
+        const w = window.open();
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+        document.getElementById('status').innerText = 'Status: Done — result opened';
+        topText.innerText = 'Draw the region to classify';
+      })
+      .catch(err => {
+        alert('Upload failed: ' + err.message);
+        document.getElementById('status').innerText = 'Status: Ready';
+        topText.innerText = 'Draw the region to classify';
+      });
+  });
+});
+</script>
+</body>
+</html>
