@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Satellite Land Classifier — Dual Map (Top interactive)</title>
+<title>Satellite Land Classifier — Dual Map</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
@@ -24,10 +24,11 @@
 .header {
   display:flex;align-items:center;gap:12px;padding:14px 18px;background:linear-gradient(90deg,var(--header-start),var(--header-end));
   color:white; box-shadow:0 8px 20px rgba(0,0,0,0.08);
-  border-radius:0 0 18px 18px;
 }
 .header .icon { width:56px;height:56px;border-radius:12px;background:white;display:flex;align-items:center;justify-content:center;
-  box-shadow:0 6px 18px rgba(0,0,0,0.12); }
+  box-shadow:0 6px 18px rgba(0,0,0,0.12); animation: pulse 2.6s ease-in-out infinite;
+}
+@keyframes pulse { 0%{transform:scale(1)}50%{transform:scale(1.035)}100%{transform:scale(1)} }
 .header .title { font-weight:800; font-size:18px; }
 .header .subtitle { font-size:13px; color: rgba(255,255,255,0.95) }
 
@@ -64,7 +65,7 @@
   box-shadow:0 12px 36px rgba(0,119,255,0.08); border:1px solid rgba(0,119,255,0.08);
 }
 
-/* responsive */
+/* small responsive */
 @media (max-width:900px){
   .container{flex-direction:column;padding:12px;height:auto}
   .left{order:2}
@@ -79,19 +80,20 @@
   <div class="icon" aria-hidden="true">
     <svg viewBox="0 0 64 64" width="36" height="36" xmlns="http://www.w3.org/2000/svg" role="img" focusable="false">
       <rect x="12" y="12" width="40" height="28" rx="4" ry="4" fill="#ffffff" stroke="#00a3ff" stroke-width="2"/>
+      <rect x="30" y="6" width="4" height="8" rx="1" ry="1" fill="#00a3ff"/>
+      <rect x="2" y="22" width="10" height="18" rx="2" ry="2" fill="#0077ff"/>
+      <g fill="#cfeeff"><rect x="4" y="24" width="2" height="14"/><rect x="7" y="24" width="2" height="14"/></g>
+      <rect x="52" y="22" width="10" height="18" rx="2" ry="2" fill="#0077ff"/>
+      <g fill="#cfeeff"><rect x="54" y="24" width="2" height="14"/><rect x="57" y="24" width="2" height="14"/></g>
       <circle cx="32" cy="26" r="6" fill="#00a3ff"/>
+      <circle cx="32" cy="26" r="3.2" fill="#ffffff"/>
     </svg>
   </div>
 
   <div>
     <div class="title">Satellite Land Classifier</div>
-    <div class="subtitle">legendary classifications for you</div>
+    <div class="subtitle">ESA WorldCover — instant land-cover classification (water, vegetation, urban, and more)</div>
   </div>
-
-  <!-- Contact button (kept) -->
-  <a class="contact" href="contact.html" title="Contact us" style="position:absolute; right:20px; top:14px; background:#fff; color:var(--btn-end); padding:8px 12px; border-radius:10px; text-decoration:none; box-shadow:0 10px 24px rgba(0,119,255,0.12); border:1px solid rgba(0,119,255,0.08); font-weight:800;">
-    Contact Us
-  </a>
 </header>
 
 <div class="container">
@@ -126,7 +128,7 @@
   <div class="mapwrap">
     <div class="map-top-text" id="mapTopText">Draw the region to classify (top map)</div>
 
-    <!-- Top half: Realtime satellite map (interactive / zoomable) -->
+    <!-- Top half: realtime map (OSM-like) -->
     <div class="map-half top">
       <div id="mapTop"></div>
     </div>
@@ -138,204 +140,109 @@
   </div>
 </div>
 
-<!-- libs -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://rawcdn.githack.com/mapbox/leaflet-image/gh-pages/leaflet-image.js"></script>
 
 <script>
-/* ========================
-   MAPS: top interactive + center-only sync
-   ======================== */
+/* ----------------- Two maps initialization ----------------- */
+const mapTop = L.map('mapTop', {preferCanvas:true}).setView([20,78], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '&copy; OpenStreetMap contributors', crossOrigin: true
+}).addTo(mapTop);
 
-/* Zoom configuration:
-   - top map is fully interactive (minZoom 3, maxZoom 19)
-   - bottom WMS stays limited to what it supports (minZoom 3, maxZoom 12)
-*/
-const TOP_MIN_Z = 3, TOP_MAX_Z = 19;
-const BOTTOM_MIN_Z = 3, BOTTOM_MAX_Z = 12;
-
-/* Top map: Esri World Imagery (satellite) + labels */
-const mapTop = L.map('mapTop', {
-  preferCanvas: true,
-  minZoom: TOP_MIN_Z,
-  maxZoom: TOP_MAX_Z,
-  zoomControl: true,
-  scrollWheelZoom: true,
-  doubleClickZoom: true,
-  dragging: true
-}).setView([12.95, 77.5], 10);
-
-/* Esri imagery tile layer */
-const esriImagery = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-let topTile = L.tileLayer(esriImagery, { minZoom: TOP_MIN_Z, maxZoom: TOP_MAX_Z, attribution: 'Tiles © Esri', crossOrigin: true })
-  .addTo(mapTop);
-
-/* Labels overlay on its own pane so it doesn't block draw interactions */
-const esriLabelsUrl = 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
-if (!mapTop.getPane('labelsPane')) {
-  mapTop.createPane('labelsPane');
-  mapTop.getPane('labelsPane').style.zIndex = 650;
-  mapTop.getPane('labelsPane').style.pointerEvents = 'none';
-}
-const labelsLayer = L.tileLayer(esriLabelsUrl, { minZoom: TOP_MIN_Z, maxZoom: TOP_MAX_Z, pane: 'labelsPane', attribution: 'Ref © Esri', crossOrigin: true })
-  .addTo(mapTop);
-
-/* Safe fallback to OSM if Esri imagery fails */
-const osmFallback = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', crossOrigin: true });
-let fallbackUsed = false;
-topTile.on('tileerror', () => {
-  if (!fallbackUsed) {
-    fallbackUsed = true;
-    console.warn('Esri imagery tile error — switching top map to OSM fallback.');
-    try { mapTop.removeLayer(topTile); } catch (e) {}
-    osmFallback.addTo(mapTop);
-    if (!mapTop.hasLayer(labelsLayer)) labelsLayer.addTo(mapTop);
-  }
-});
-
-/* Bottom map: ESA WorldCover WMS (unchanged) */
-const mapBottom = L.map('mapBottom', { preferCanvas: true, zoomControl: false, minZoom: BOTTOM_MIN_Z, maxZoom: BOTTOM_MAX_Z })
-  .setView(mapTop.getCenter(), Math.min(mapTop.getZoom(), BOTTOM_MAX_Z));
-
+const mapBottom = L.map('mapBottom', {preferCanvas:true, zoomControl:false}).setView(mapTop.getCenter(), mapTop.getZoom());
 const wmsLayer = L.tileLayer.wms('https://services.terrascope.be/wms/v2', {
   layers: 'WORLDCOVER_2021_MAP',
   format: 'image/png',
   transparent: false,
   attribution: 'ESA WorldCover 2021',
-  minZoom: BOTTOM_MIN_Z,
-  maxZoom: BOTTOM_MAX_Z,
+  maxZoom: 12,
   crossOrigin: true
 }).addTo(mapBottom);
 
-/* AFTER layout settle, ensure sizes are correct */
-function refreshSizes() { try { mapTop.invalidateSize(); mapBottom.invalidateSize(); } catch (e) {} }
-setTimeout(refreshSizes, 300);
-window.addEventListener('resize', () => setTimeout(refreshSizes, 150));
+setTimeout(()=>{ mapTop.invalidateSize(); mapBottom.invalidateSize(); }, 200);
 
-/* SYNC: CENTER-ONLY (no zoom sync) so top can zoom freely while bottom follows center */
+/* ----------------- Sync both maps ----------------- */
 let syncing = false;
-function syncCenterFromTop() {
-  if (syncing) return;
-  syncing = true;
-  // Pan bottom to the top center, keep bottom zoom unchanged
-  mapBottom.panTo(mapTop.getCenter(), { animate: false });
-  syncing = false;
-}
-function syncCenterFromBottom() {
-  if (syncing) return;
-  syncing = true;
-  mapTop.panTo(mapBottom.getCenter(), { animate: false });
-  syncing = false;
-}
-mapTop.on('moveend', syncCenterFromTop);
-mapBottom.on('moveend', syncCenterFromBottom);
-
-/* Keep bottom zoom within its supported range if user pans bottom or code tries to set zoom beyond limits */
-mapTop.on('zoomend', () => {
-  // No action: we intentionally do not change bottom zoom here.
-  // But if you want bottom zoom to change when top zoom is small, consider a strategy to step it.
-});
+function syncFromTop(){ if(syncing)return; syncing=true; mapBottom.setView(mapTop.getCenter(),mapTop.getZoom(),{animate:false}); syncing=false;}
+function syncFromBottom(){ if(syncing)return; syncing=true; mapTop.setView(mapBottom.getCenter(),mapBottom.getZoom(),{animate:false}); syncing=false;}
+mapTop.on('moveend zoomend',syncFromTop);
+mapBottom.on('moveend zoomend',syncFromBottom);
 
 /* ----------------- Drawing (Top map only, mirrored to bottom) ----------------- */
 let drawnTop = new L.FeatureGroup().addTo(mapTop);
 let drawnBottom = new L.FeatureGroup().addTo(mapBottom);
 const drawControlTop = new L.Control.Draw({
-  draw: { rectangle: { shapeOptions: { color: '#0a84ff', weight: 2, dashArray: '6 6' } }, polygon: false, polyline: false, circle: false, marker: false },
-  edit: { featureGroup: drawnTop, remove: true }
+  draw:{ rectangle:{ shapeOptions:{color:'#0a84ff', weight:2, dashArray:'6 6'} }, polygon:false, polyline:false, circle:false, marker:false},
+  edit:{ featureGroup: drawnTop, remove:true }
 });
 mapTop.addControl(drawControlTop);
 
-let lastRect = null, lastRectBottom = null;
-mapTop.on(L.Draw.Event.CREATED, e => {
+let lastRect=null,lastRectBottom=null;
+mapTop.on(L.Draw.Event.CREATED,e=>{
   drawnTop.clearLayers(); drawnBottom.clearLayers();
-  drawnTop.addLayer(e.layer); lastRect = e.layer;
-  const b = e.layer.getBounds();
-  const mirror = L.rectangle(b, { color: '#0a84ff', weight: 2, dashArray: '6 6' }).addTo(drawnBottom);
-  lastRectBottom = mirror;
-  document.getElementById('status').innerText = 'Status: Crop ready';
+  drawnTop.addLayer(e.layer); lastRect=e.layer;
+  const b=e.layer.getBounds();
+  const mirror=L.rectangle(b,{color:'#0a84ff',weight:2,dashArray:'6 6'}).addTo(drawnBottom);
+  lastRectBottom=mirror;
+  document.getElementById('status').innerText='Status: Crop ready';
 });
-mapTop.on(L.Draw.Event.EDITED, () => {
-  const topLayer = drawnTop.getLayers()[0] || null;
-  if (topLayer) {
-    lastRect = topLayer;
-    const b = topLayer.getBounds();
-    if (lastRectBottom) lastRectBottom.setBounds(b);
-    else lastRectBottom = L.rectangle(b, { color: '#0a84ff', weight: 2, dashArray: '6 6' }).addTo(drawnBottom);
-  }
+mapTop.on(L.Draw.Event.EDITED,()=>{
+  const topLayer=drawnTop.getLayers()[0]||null;
+  if(topLayer){lastRect=topLayer; const b=topLayer.getBounds();
+    if(lastRectBottom){lastRectBottom.setBounds(b);} else {
+      lastRectBottom=L.rectangle(b,{color:'#0a84ff',weight:2,dashArray:'6 6'}).addTo(drawnBottom);
+    }}
 });
-mapTop.on(L.Draw.Event.DELETED, () => {
-  drawnTop.clearLayers(); drawnBottom.clearLayers(); lastRect = null; lastRectBottom = null;
-  document.getElementById('status').innerText = 'Status: Ready';
+mapTop.on(L.Draw.Event.DELETED,()=>{
+  drawnTop.clearLayers(); drawnBottom.clearLayers(); lastRect=null; lastRectBottom=null;
+  document.getElementById('status').innerText='Status: Ready';
 });
 
-/* ----------------- Buttons (unchanged) ----------------- */
-document.getElementById('drawBtn').onclick = () => { const d = new L.Draw.Rectangle(mapTop, drawControlTop.options.draw.rectangle); d.enable(); document.getElementById('status').innerText = 'Status: Drawing...'; };
-document.getElementById('bigBoxBtn').onclick = () => {
-  const b = mapTop.getBounds(), s = b.getSouth(), n = b.getNorth(), w = b.getWest(), e = b.getEast();
-  const latSpan = n - s, lonSpan = e - w, pad = 0.15, ns = s + latSpan * pad, nn = n - latSpan * pad, nw = w + lonSpan * pad, ne = e - lonSpan * pad;
+/* ----------------- Buttons ----------------- */
+document.getElementById('drawBtn').onclick=()=>{const d=new L.Draw.Rectangle(mapTop,drawControlTop.options.draw.rectangle);d.enable();document.getElementById('status').innerText='Status: Drawing...';};
+document.getElementById('bigBoxBtn').onclick=()=>{
+  const b=mapTop.getBounds(),s=b.getSouth(),n=b.getNorth(),w=b.getWest(),e=b.getEast();
+  const latSpan=n-s,lonSpan=e-w,pad=0.15,ns=s+latSpan*pad,nn=n-latSpan*pad,nw=w+lonSpan*pad,ne=e-lonSpan*pad;
   drawnTop.clearLayers(); drawnBottom.clearLayers();
-  const rectTop = L.rectangle([[ns, nw], [nn, ne]], { color: '#0a84ff', weight: 2, dashArray: '6 6' }).addTo(drawnTop);
-  const rectBottom = L.rectangle([[ns, nw], [nn, ne]], { color: '#0a84ff', weight: 2, dashArray: '6 6' }).addTo(drawnBottom);
-  lastRect = rectTop; lastRectBottom = rectBottom;
+  const rectTop=L.rectangle([[ns,nw],[nn,ne]],{color:'#0a84ff',weight:2,dashArray:'6 6'}).addTo(drawnTop);
+  const rectBottom=L.rectangle([[ns,nw],[nn,ne]],{color:'#0a84ff',weight:2,dashArray:'6 6'}).addTo(drawnBottom);
+  lastRect=rectTop; lastRectBottom=rectBottom;
   mapTop.fitBounds(rectTop.getBounds()); mapBottom.fitBounds(rectBottom.getBounds());
-  document.getElementById('status').innerText = 'Status: Big crop created';
-  refreshSizes();
+  document.getElementById('status').innerText='Status: Big crop created';
 };
-document.getElementById('clearBtn').onclick = () => { drawnTop.clearLayers(); drawnBottom.clearLayers(); lastRect = null; lastRectBottom = null; document.getElementById('status').innerText = 'Status: Cleared'; };
+document.getElementById('clearBtn').onclick=()=>{drawnTop.clearLayers(); drawnBottom.clearLayers(); lastRect=null; lastRectBottom=null; document.getElementById('status').innerText='Status: Cleared';};
 
-/* ----------------- Helpers and capture (unchanged) ----------------- */
-function hideDrawnLayersFromLayerGroup(group) { const saved = []; group.eachLayer(l => { saved.push(l); if (l.setStyle) l.setStyle({ stroke: false, fill: false, opacity: 0, fillOpacity: 0 }); }); return saved; }
-function restoreDrawnLayersToLayerGroup(group) { group.eachLayer(l => { if (l.setStyle) l.setStyle({ stroke: true, fill: false, opacity: 1, fillOpacity: 1 }); }); }
-function makeCompressedDataURL(canvas, targetSize) {
-  const maxDim = Math.max(canvas.width, canvas.height);
-  let out = canvas;
-  if (maxDim > targetSize) {
-    const scale = targetSize / maxDim;
-    const r = document.createElement('canvas'); r.width = Math.round(canvas.width * scale); r.height = Math.round(canvas.height * scale);
-    r.getContext('2d').drawImage(canvas, 0, 0, r.width, r.height);
-    out = r;
-  }
-  return out.toDataURL('image/jpeg', 0.8);
-}
-function dataURLtoBlob(dataurl) {
-  const arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1];
-  const bstr = atob(arr[1]); let n = bstr.length; const u8 = new Uint8Array(n);
-  while (n--) u8[n] = bstr.charCodeAt(n);
-  return new Blob([u8], { type: mime });
-}
+/* ----------------- Helpers ----------------- */
+function hideDrawnLayersFromLayerGroup(group){const saved=[];group.eachLayer(l=>{saved.push(l);if(l.setStyle)l.setStyle({stroke:false,fill:false,opacity:0,fillOpacity:0});});return saved;}
+function restoreDrawnLayersToLayerGroup(group){group.eachLayer(l=>{if(l.setStyle)l.setStyle({stroke:true,fill:false,opacity:1,fillOpacity:1});});}
+function makeCompressedDataURL(canvas,targetSize){const maxDim=Math.max(canvas.width,canvas.height);let out=canvas;if(maxDim>targetSize){const scale=targetSize/maxDim;const r=document.createElement('canvas');r.width=Math.round(canvas.width*scale);r.height=Math.round(canvas.height*scale);r.getContext('2d').drawImage(canvas,0,0,r.width,r.height);out=r;}return out.toDataURL('image/jpeg',0.8);}
+function dataURLtoBlob(dataurl){const arr=dataurl.split(','),mime=arr[0].match(/:(.*?);/)[1];const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--){u8[n]=bstr.charCodeAt(n);}return new Blob([u8],{type:mime});}
 
-document.getElementById('classifyBtn').onclick = () => {
-  if (!lastRectBottom) { alert('Draw a rectangle first on the top map.'); return; }
-  const topText = document.getElementById('mapTopText');
-  topText.innerText = 'Please wait — result is processing…';
-  document.getElementById('status').innerText = 'Status: Rendering image...';
+/* ----------------- Capture Bottom Map ----------------- */
+document.getElementById('classifyBtn').onclick=()=>{
+  if(!lastRectBottom){alert('Draw a rectangle first on the top map.');return;}
+  const topText=document.getElementById('mapTopText');
+  topText.innerText='Please wait — result is processing…';
+  document.getElementById('status').innerText='Status: Rendering image...';
 
-  const saved = hideDrawnLayersFromLayerGroup(drawnBottom);
-  leafletImage(mapBottom, (err, canvas) => {
+  const saved=hideDrawnLayersFromLayerGroup(drawnBottom);
+  leafletImage(mapBottom,(err,canvas)=>{
     restoreDrawnLayersToLayerGroup(drawnBottom);
-    if (err) { alert('Error rendering bottom map: ' + err); document.getElementById('status').innerText = 'Status: Ready'; topText.innerText = 'Draw the region to classify (top map)'; return; }
-    const b = lastRectBottom.getBounds(), south = b.getSouth(), west = b.getWest(), north = b.getNorth(), east = b.getEast();
-    const sw = mapBottom.latLngToContainerPoint([south, west]), ne = mapBottom.latLngToContainerPoint([north, east]);
-    const x = Math.round(Math.min(sw.x, ne.x)), y = Math.round(Math.min(ne.y, sw.y)), w = Math.round(Math.abs(ne.x - sw.x)), h = Math.round(Math.abs(ne.y - sw.y));
-    if (w <= 0 || h <= 0) { alert('Invalid crop size. Try drawing again.'); document.getElementById('status').innerText = 'Status: Ready'; topText.innerText = 'Draw the region to classify (top map)'; return; }
-    const out = document.createElement('canvas'); out.width = w; out.height = h; const ctx = out.getContext('2d'); ctx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
-    const size = parseInt(document.getElementById('sizeSelect').value, 10) || 800;
-    const dataURL = makeCompressedDataURL(out, size);
-    const blob = dataURLtoBlob(dataURL);
-    const fd = new FormData(); fd.append('imagefile', blob, 'crop.jpg'); fd.append('west', west); fd.append('south', south); fd.append('east', east); fd.append('north', north); fd.append('size', size);
-    document.getElementById('status').innerText = 'Status: Uploading...';
-    fetch('/upload_blob', { method: 'POST', body: fd })
-      .then(r => { if (!r.ok) throw new Error('Server ' + r.status); return r.text(); })
-      .then(html => {
-        const w = window.open(); w.document.open(); w.document.write(html); w.document.close();
-        document.getElementById('status').innerText = 'Status: Done — result opened';
-        topText.innerText = 'Draw the region to classify (top map)';
-      })
-      .catch(err => { alert('Upload failed: ' + err.message); document.getElementById('status').innerText = 'Status: Ready'; topText.innerText = 'Draw the region to classify (top map)'; });
+    if(err){alert('Error rendering bottom map: '+err);document.getElementById('status').innerText='Status: Ready';topText.innerText='Draw the region to classify (top map)';return;}
+    const b=lastRectBottom.getBounds(),south=b.getSouth(),west=b.getWest(),north=b.getNorth(),east=b.getEast();
+    const sw=mapBottom.latLngToContainerPoint([south,west]),ne=mapBottom.latLngToContainerPoint([north,east]);
+    const x=Math.round(Math.min(sw.x,ne.x)),y=Math.round(Math.min(ne.y,sw.y)),w=Math.round(Math.abs(ne.x-sw.x)),h=Math.round(Math.abs(ne.y-sw.y));
+    if(w<=0||h<=0){alert('Invalid crop size. Try drawing again.');document.getElementById('status').innerText='Status: Ready';topText.innerText='Draw the region to classify (top map)';return;}
+    const out=document.createElement('canvas');out.width=w;out.height=h;const ctx=out.getContext('2d');ctx.drawImage(canvas,x,y,w,h,0,0,w,h);
+    const size=parseInt(document.getElementById('sizeSelect').value,10)||800;
+    const dataURL=makeCompressedDataURL(out,size);const blob=dataURLtoBlob(dataURL);
+    const fd=new FormData();fd.append('imagefile',blob,'crop.jpg');fd.append('west',west);fd.append('south',south);fd.append('east',east);fd.append('north',north);fd.append('size',size);
+    document.getElementById('status').innerText='Status: Uploading...';
+    fetch('/upload_blob',{method:'POST',body:fd}).then(r=>{if(!r.ok)throw new Error('Server '+r.status);return r.text();}).then(html=>{const w=window.open();w.document.open();w.document.write(html);w.document.close();document.getElementById('status').innerText='Status: Done — result opened';topText.innerText='Draw the region to classify (top map)';}).catch(err=>{alert('Upload failed: '+err.message);document.getElementById('status').innerText='Status: Ready';topText.innerText='Draw the region to classify (top map)';});
   });
 };
-
 </script>
 </body>
 </html>
