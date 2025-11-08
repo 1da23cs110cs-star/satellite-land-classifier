@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Contact — Satellite Land Classifier</title>
+
+<style>
+:root{
+  --accent1: #2fc0ff;
+  --accent2: #0077ff;
+  --card-bg: #fff;
+  --ink: #042a3f;
+  --muted: #6b8896;
+  --shadow-strong: 0 18px 40px rgba(2,80,160,0.12);
+  --shadow-soft: 0 12px 28px rgba(10,40,80,0.06);
+  --radius:14px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:linear-gradient(180deg,#f7fbff,#eef8ff); color:var(--ink);}
+
+/* header (same style + curved) */
+.header-wrap{display:flex;justify-content:center;padding:18px 8px 6px}
+.header{ width:100%; max-width:1100px; background:linear-gradient(90deg,var(--accent1),var(--accent2)); color:white; border-radius:0 0 22px 22px; padding:18px 20px; box-shadow:var(--shadow-strong); display:flex; align-items:center; gap:14px; position:relative; }
+.header .title{ font-weight:900; font-size:20px; background: -webkit-linear-gradient(#013f7a,#001b2e); -webkit-background-clip:text; -webkit-text-fill-color:transparent;}
+.header .subtitle{ font-size:13px; color:rgba(255,255,255,0.95); font-weight:600; }
+
+/* content area */
+.content { max-width:900px; margin:28px auto; padding:0 14px; }
+
+/* center contact card */
+.center-contact { background:linear-gradient(180deg,#fff,#fbfdff); padding:26px; border-radius:16px; box-shadow:var(--shadow-strong); text-align:center; }
+.person-icon{ width:110px; height:110px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(180deg,#e9f8ff,#dff6ff); box-shadow:0 12px 30px rgba(2,80,160,0.08); margin-bottom:10px }
+.person-icon svg{ width:56px;height:56px; fill:var(--accent2) }
+h2{ margin:8px 0 6px 0; font-size:20px }
+.sub{ margin:0 0 16px 0; color:var(--muted); font-weight:600 }
+
+/* contact list */
+.list{ display:flex; flex-direction:column; gap:12px; align-items:center; max-width:520px; margin:0 auto; }
+.item{ background:#fff; width:100%; padding:12px 14px; border-radius:12px; box-shadow:var(--shadow-soft); display:flex; gap:12px; align-items:center; }
+.item svg{ width:22px;height:22px; flex:0 0 22px }
+
+/* footer */
+.footer{ text-align:center; margin-top:22px; color:var(--muted); padding-bottom:28px }
+
+/* back button top-right */
+.back-link{ position:absolute; right:18px; top:18px; background:#fff; color:var(--accent2); padding:10px 12px; border-radius:10px; box-shadow:0 8px 20px rgba(0,119,255,0.12); text-decoration:none; font-weight:700; }
+
+/* responsive */
+@media (max-width:720px){ .center-contact{ padding:18px } .header{ padding:14px } .back-link{ right:12px; top:12px } }
+</style>
+</head>
+<body>
+
+<div class="header-wrap">
+  <header class="header">
+    <div style="width:52px;height:52px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(0,0,0,0.12)">
+      <svg viewBox="0 0 64 64" width="34" height="34"><rect x="10" y="16" width="44" height="28" rx="6" fill="#fff" stroke="#00a3ff" stroke-width="2"/><circle cx="32" cy="30" r="6" fill="#00a3ff"/></svg>
+    </div>
+    <div>
+      <div class="title">Satellite Land Classifier</div>
+      <div class="subtitle">legendary classifications for you</div>
+    </div>
+
+    <a class="back-link" href="index.html">← Back</a>
+  </header>
+</div>
+
+<div class="content">
+  <div class="center-contact" role="main">
+    <div class="person-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z"/></svg>
+    </div>
+
+    <h2>Megharaja MH</h2>
+    <p class="sub">legendary classifications for you</p>
+
+    <div class="list">
+      <div class="item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#E1306C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path></svg>
+        <div><strong>Instagram</strong><div style="font-size:13px;color:var(--muted)">@megharajmh</div></div>
+      </div>
+
+      <div class="item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0077ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="M22 6l-10 7L2 6"></path></svg>
+        <div><strong>Email</strong><div style="font-size:13px;color:var(--muted)">megharajmh777@gmail.com</div></div>
+      </div>
+
+      <div class="item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#00a3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92V21a1 1 0 0 1-1.09 1 19 19 0 0 1-8.63-3.07 19 19 0 0 1-6-6A19 19 0 0 1 2 3.09 1 1 0 0 1 3 2h4.09a1 1 0 0 1 1 .75c.12.6.27 1.2.46 1.78a1 1 0 0 1-.24 1L7.5 7.5a16 16 0 0 0 8 8l1.95-1.81a1 1 0 0 1 1 .07c.6.39 1.2.73 1.78 1.02a1 1 0 0 1 .75.96z"></path></svg>
+        <div><strong>Phone</strong><div style="font-size:13px;color:var(--muted)">+91 9113963499</div></div>
+      </div>
+
+      <div class="item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ff6f00" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12S3 17 3 10a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="2"></circle></svg>
+        <div><strong>Location</strong><div style="font-size:13px;color:var(--muted)">Magadi taluk, Bengaluru South - 562120</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">© <span id="yr"></span> Megharaja MH • All rights reserved</div>
+</div>
+
+<script> document.getElementById('yr').innerText = new Date().getFullYear(); </script>
+</body>
+</html>
